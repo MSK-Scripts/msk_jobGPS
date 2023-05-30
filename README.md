@@ -1,7 +1,7 @@
 # msk_jobGPS
 Player, Job, Blip & Panicbutton
 
-[Forum Post](https://forum.cfx.re/t/msk-jobgps/5109080)
+### [Forum Post](https://forum.cfx.re/t/msk-jobgps/5109080)
 
 ## Description
 * If the Player is in OneSync Distance then the Blip will be updated lifetime
