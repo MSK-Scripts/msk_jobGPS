@@ -1,5 +1,6 @@
 Config = {}
 ----------------------------------------------------------------
+Config.VersionChecker = true
 Config.Debug = true
 ----------------------------------------------------------------
 -- !!! This function is clientside AND serverside !!!
