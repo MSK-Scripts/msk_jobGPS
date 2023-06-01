@@ -121,7 +121,7 @@ CreateThread(function()
 
 		local xPlayers = ESX.GetExtendedPlayers()
 		for k, xPlayer in pairs(xPlayers) do
-			if GPS[xPlayer.job.name][xPlayer.source] then
+			if GPS[xPlayer.job.name] and GPS[xPlayer.job.name][xPlayer.source] then
 				GPS[xPlayer.job.name][xPlayer.source].coords = xPlayer.getCoords(true)
 				GPS[xPlayer.job.name][xPlayer.source].heading = math.ceil(GetEntityHeading(GetPlayerPed(xPlayer.source)))
 
