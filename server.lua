@@ -136,7 +136,7 @@ end)
 removeBlipById = function(xPlayer)
 	local source, job = xPlayer.source, xPlayer.job.name
 
-	if GPS[job][source] then 
+	if GPS[job] and GPS[job][source] then 
 		GPS[job][source] = nil
 
 		for playerId, v in pairs(GPS[job]) do
