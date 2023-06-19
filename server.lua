@@ -72,8 +72,8 @@ ESX.RegisterUsableItem(Config.GPS.item, function(source)
 
 		GPS[xPlayer.job.name][xPlayer.source] = {
 			xPlayer = xPlayer,
-			playerPed = playerPed,
 			netId = NetworkGetNetworkIdFromEntity(playerPed),
+			coords = GetEntityCoords(playerPed),
 			heading = math.ceil(GetEntityHeading(playerPed))
 		}
 
@@ -96,11 +96,22 @@ RegisterNetEvent('esx:playerDropped', function(playerId, reason)
 	removeBlipById(xPlayer)
 end)
 
+RegisterNetEvent("esx:setJob", function(playerId, newJob, oldJob)
+	if newJob.name == oldJob.name then return end
+	local src = playerId
+	local xPlayer = ESX.GetPlayerFromId(src)
+
+	Config.Notification(src, 'GPS deactivated')
+	xPlayer.triggerEvent('msk_jobGPS:deactivateGPS')
+	removeBlipById(xPlayer)
+end)
+
 RegisterNetEvent('msk_jobGPS:setDeath')
 AddEventHandler('msk_jobGPS:setDeath', function()
 	local src = source
    	local xPlayer = ESX.GetPlayerFromId(src)
 
+	Config.Notification(src, 'GPS deactivated')
 	xPlayer.triggerEvent('msk_jobGPS:deactivateGPS')
 	removeBlipById(xPlayer)
 end)
@@ -119,13 +130,21 @@ CreateThread(function()
     while true do
         local sleep = Config.GPS.refresh * 1000
 
+		-- New Way to refresh PlayerData
+		for job, players in pairs(GPS) do
+			for playerId, info in pairs(ids) do
+                -- info = xPlayer, netId, heading
+				local playerPed = GetPlayerPed(playerId)
+
+				info.coords = GetEntityCoords(playerPed)
+				info.heading = math.ceil(GetEntityHeading(playerPed))
+			end
+		end
+
 		local xPlayers = ESX.GetExtendedPlayers()
 		for k, xPlayer in pairs(xPlayers) do
 			if GPS[xPlayer.job.name] and GPS[xPlayer.job.name][xPlayer.source] then
-				GPS[xPlayer.job.name][xPlayer.source].coords = xPlayer.getCoords(true)
-				GPS[xPlayer.job.name][xPlayer.source].heading = math.ceil(GetEntityHeading(GetPlayerPed(xPlayer.source)))
-
-				xPlayer.triggerEvent('msk_jobGPS:refreshBlips', GPS)
+				TriggerClientEvent('msk_jobGPS:refreshBlips', xPlayer.source, GPS)
 			end
 		end
 

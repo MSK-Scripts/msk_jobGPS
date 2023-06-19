@@ -133,7 +133,7 @@ refreshBlips = function(GPS)
     for job, ids in pairs(GPS) do
         if ESX.PlayerData.job.name == job then
             for playerId, v in pairs(ids) do
-                -- v = xPlayer, playerPed, netId, heading
+                -- v = xPlayer, netId, heading
                 local xPlayer = v.xPlayer
                 
                 if ESX.PlayerData.identifier ~= xPlayer.identifier then
