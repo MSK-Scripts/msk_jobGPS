@@ -132,7 +132,7 @@ CreateThread(function()
 
 		-- New Way to refresh PlayerData
 		for job, players in pairs(GPS) do
-			for playerId, info in pairs(ids) do
+			for playerId, info in pairs(players) do
                 -- info = xPlayer, netId, heading
 				local playerPed = GetPlayerPed(playerId)
 
