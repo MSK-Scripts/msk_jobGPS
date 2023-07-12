@@ -6,9 +6,9 @@ Config.Debug = true
 -- !!! This function is clientside AND serverside !!!
 Config.Notification = function(source, message)
     if IsDuplicityVersion() then -- serverside
-        MSK.Notification(source, message)
+        MSK.Notification(source, 'MSK JobGPS', message)
     else -- clientside
-        MSK.Notification(message)
+        MSK.Notification('MSK JobGPS', message)
     end
 end
 ----------------------------------------------------------------
