@@ -130,27 +130,32 @@ CreateThread(function()
     while true do
         local sleep = Config.GPS.refresh * 1000
 
-		-- New Way to refresh PlayerData
-		for job, players in pairs(GPS) do
-			for playerId, info in pairs(players) do
-                -- info = xPlayer, netId, heading
-				local playerPed = GetPlayerPed(playerId)
+        -- New Way to refresh PlayerData
+        for job, players in pairs(GPS) do
+            if players and type(players) == "table" then
+                for playerId, info in pairs(players) do
+                    -- info = xPlayer, netId, heading
+                    local playerPed = GetPlayerPed(playerId)
 
-				info.coords = GetEntityCoords(playerPed)
-				info.heading = math.ceil(GetEntityHeading(playerPed))
-			end
-		end
+                    info.coords = GetEntityCoords(playerPed)
+                    info.heading = math.ceil(GetEntityHeading(playerPed))
+                end
+            else
+                logging('error', 'Invalid player data for job: ' .. job)
+            end
+        end
 
-		local xPlayers = ESX.GetExtendedPlayers()
-		for k, xPlayer in pairs(xPlayers) do
-			if GPS[xPlayer.job.name] and GPS[xPlayer.job.name][xPlayer.source] then
-				TriggerClientEvent('msk_jobGPS:refreshBlips', xPlayer.source, GPS)
-			end
-		end
+        local xPlayers = ESX.GetExtendedPlayers()
+        for k, xPlayer in pairs(xPlayers) do
+            if GPS[xPlayer.job.name] and GPS[xPlayer.job.name][xPlayer.source] then
+                TriggerClientEvent('msk_jobGPS:refreshBlips', xPlayer.source, GPS)
+            end
+        end
 
         Wait(sleep)
     end
 end)
+
 
 removeBlipById = function(xPlayer)
 	local source, job = xPlayer.source, xPlayer.job.name
