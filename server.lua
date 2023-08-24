@@ -100,6 +100,7 @@ RegisterNetEvent("esx:setJob", function(playerId, newJob, oldJob)
 	if newJob.name == oldJob.name then return end
 	local src = playerId
 	local xPlayer = ESX.GetPlayerFromId(src)
+	if not GPS[xPlayer.job.name] or not GPS[xPlayer.job.name][xPlayer.source] then return end
 
 	Config.Notification(src, 'GPS deactivated')
 	xPlayer.triggerEvent('msk_jobGPS:deactivateGPS')
