@@ -65,6 +65,8 @@ addBlips = function(GPS, Player, heading)
     logging('debug', 'addBlips')
 
     if not Player then
+        while not ESX.PlayerData.job do Wait(0) end
+
         for job, ids in pairs(GPS) do
             if ESX.PlayerData.job.name == job then
                 for playerId, v in pairs(ids) do
@@ -129,6 +131,7 @@ end
 
 refreshBlips = function(GPS)
     logging('debug', 'refreshBlips')
+    while not ESX.PlayerData.job do Wait(0) end
 
     for job, ids in pairs(GPS) do
         if ESX.PlayerData.job.name == job then
@@ -194,8 +197,6 @@ isAllowed = function(xPlayer, action)
 end
 
 logging = function(code, ...)
-    if Config.Debug then
-        local script = "[^2"..GetCurrentResourceName().."^0]"
-        MSK.logging(script, code, ...)
-    end
+    if not Config.Debug then return end
+    MSK.logging(code, ...)
 end

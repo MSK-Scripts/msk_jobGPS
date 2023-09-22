@@ -180,10 +180,8 @@ isAllowed = function(xPlayer, action)
 end
 
 logging = function(code, ...)
-    if Config.Debug then
-        local script = "[^2"..GetCurrentResourceName().."^0]"
-        MSK.logging(script, code, ...)
-    end
+    if not Config.Debug then return end
+    MSK.logging(code, ...)
 end
 
 GithubUpdater = function()
