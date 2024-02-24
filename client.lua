@@ -1,7 +1,7 @@
 local isActivated = false
 local Blips, activeBlips = {}, {}
 
-AddEventHandler('esx:onPlayerDeath', function(data)
+AddEventHandler('esx:onPlayerDeath', function()
     TriggerServerEvent('msk_jobGPS:setDeath')
 end)
 
@@ -65,34 +65,28 @@ addBlips = function(GPS, Player, heading)
     logging('debug', 'addBlips')
 
     if not Player then
-        while not ESX.PlayerData.job do Wait(0) end
+        for playerId, v in pairs(GPS) do
+            logging('debug', job, playerId, v)
+            -- v = xPlayer, playerPed, netId, heading
+            local xPlayer = v.xPlayer
 
-        for job, ids in pairs(GPS) do
-            if ESX.PlayerData.job.name == job then
-                for playerId, v in pairs(ids) do
-                    logging('debug', job, playerId, v)
-                    -- v = xPlayer, playerPed, netId, heading
-                    local xPlayer = v.xPlayer
+            if ESX.PlayerData.identifier ~= xPlayer.identifier then
+                local blip = AddBlipForCoord(xPlayer.coords.x, xPlayer.coords.y, xPlayer.coords.z)
 
-                    if ESX.PlayerData.identifier ~= xPlayer.identifier then
-                        local blip = AddBlipForCoord(xPlayer.coords.x, xPlayer.coords.y, xPlayer.coords.z)
+                SetBlipSprite(blip, Config.GPS.blip.id)
+                SetBlipScale(blip, Config.GPS.blip.scale)
+                SetBlipColour(blip, Config.GPS.blip.color)
 
-                        SetBlipSprite(blip, Config.GPS.blip.id)
-                        SetBlipScale(blip, Config.GPS.blip.scale)
-                        SetBlipColour(blip, Config.GPS.blip.color)
+                ShowNumberOnBlip(blip, playerId)
+                ShowHeadingIndicatorOnBlip(blip, true)
+                SetBlipRotation(blip, v.heading)
 
-                        ShowNumberOnBlip(blip, playerId)
-                        ShowHeadingIndicatorOnBlip(blip, true)
-                        SetBlipRotation(blip, v.heading)
+                BeginTextCommandSetBlipName('STRING')
+                AddTextComponentString(('%s'):format(xPlayer.name))
+                EndTextCommandSetBlipName(blip)
 
-                        BeginTextCommandSetBlipName('STRING')
-                        AddTextComponentString(('%s'):format(xPlayer.name))
-                        EndTextCommandSetBlipName(blip)
-
-                        table.insert(Blips, {blip = blip, source = playerId})
-                        activeBlips[playerId] = {isActive = false, blip = blip}
-                    end
-                end
+                table.insert(Blips, {blip = blip, source = playerId})
+                activeBlips[playerId] = {isActive = false, blip = blip}
             end
         end
     else
@@ -131,48 +125,42 @@ end
 
 refreshBlips = function(GPS)
     logging('debug', 'refreshBlips')
-    while not ESX.PlayerData.job do Wait(0) end
 
-    for job, ids in pairs(GPS) do
-        if ESX.PlayerData.job.name == job then
-            for playerId, v in pairs(ids) do
-                -- v = xPlayer, netId, heading
-                local xPlayer = v.xPlayer
+    for playerId, v in pairs(GPS) do
+        -- v = xPlayer, netId, heading
+        local xPlayer = v.xPlayer
+        
+        if ESX.PlayerData.identifier ~= xPlayer.identifier then
+            if not activeBlips[playerId] then addBlips(GPS, xPlayer, v.heading) end
+
+            logging('debug', 'Blip is active')
+            local inOneSync = inOneSync(v.netId)
                 
-                if ESX.PlayerData.identifier ~= xPlayer.identifier then
-                    if not activeBlips[playerId] then addBlips(GPS, xPlayer, v.heading) end
+            if inOneSync and not activeBlips[playerId].isActive then
+                logging('debug', 'inOneSync')
 
-                    logging('debug', 'Blip is active')
-                    local inOneSync = inOneSync(v.netId)
-                        
-                    if inOneSync and not activeBlips[playerId].isActive then
-                        logging('debug', 'inOneSync')
+                CreateThread(function()
+                    activeBlips[playerId].isActive = true
 
-                        CreateThread(function()
-                            activeBlips[playerId].isActive = true
+                    while activeBlips[playerId] and activeBlips[playerId].isActive and DoesEntityExist(inOneSync.ped) do
+                        local coords = GetEntityCoords(inOneSync.ped)
+                        local heading = math.ceil(GetEntityHeading(inOneSync.ped))
 
-                            while activeBlips[playerId] and activeBlips[playerId].isActive and DoesEntityExist(inOneSync.ped) do
-                                local coords = GetEntityCoords(inOneSync.ped)
-                                local heading = math.ceil(GetEntityHeading(inOneSync.ped))
+                        SetBlipCoords(activeBlips[playerId].blip, coords.x, coords.y, coords.z)
+                        SetBlipRotation(activeBlips[playerId].blip, heading)
 
-                                SetBlipCoords(activeBlips[playerId].blip, coords.x, coords.y, coords.z)
-                                SetBlipRotation(activeBlips[playerId].blip, heading)
-
-                                Wait(0)
-                            end
-                        end)
-                    elseif not inOneSync then
-                        logging('debug', 'not inOneSync')
-                        activeBlips[playerId].isActive = false
-
-                        SetBlipCoords(activeBlips[playerId].blip, v.coords.x, v.coords.y, v.coords.z)
-                        SetBlipRotation(activeBlips[playerId].blip, v.heading)
+                        Wait(0)
                     end
-                end
+                end)
+            elseif not inOneSync then
+                logging('debug', 'not inOneSync')
+                activeBlips[playerId].isActive = false
 
+                SetBlipCoords(activeBlips[playerId].blip, v.coords.x, v.coords.y, v.coords.z)
+                SetBlipRotation(activeBlips[playerId].blip, v.heading)
             end
         end
-	end
+    end
 end
 
 inOneSync = function(netId)

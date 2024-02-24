@@ -1,4 +1,5 @@
 local GPS = {}
+local playerJobs = {}
 
 AddEventHandler('onResourceStart', function(resource)
 	if GetCurrentResourceName() == resource then
@@ -46,7 +47,7 @@ togglePanicbutton = function(source)
 	end
 
 	if not GPS[xPlayer.job.name][xPlayer.source] then canUseItem = false end
-	if not canUseItem then return Config.Notification(src, 'Panicbutton does not work now') end
+	if not canUseItem then return Config.Notification(src, 'You have to active GPS first') end
 
 	local xPlayers = ESX.GetExtendedPlayers('job', xPlayer.job.name)
 	for k, xTarget in pairs(xPlayers) do
@@ -63,14 +64,15 @@ ESX.RegisterUsableItem(Config.GPS.item, function(source)
 
 	if not isAllowed(xPlayer, 'gps') then return end
 
-	if GPS[xPlayer.job.name][xPlayer.source] then
+	if GPS[xPlayer.job.name][src] then
 		Config.Notification(src, 'GPS deactivated')
 		xPlayer.triggerEvent('msk_jobGPS:deactivateGPS')
 		removeBlipById(xPlayer)
 	else
-		local playerPed = GetPlayerPed(xPlayer.source)
+		local playerPed = GetPlayerPed(src)
 
-		GPS[xPlayer.job.name][xPlayer.source] = {
+		playerJobs[src] = xPlayer.job.name
+		GPS[playerJobs[src]][src] = {
 			xPlayer = xPlayer,
 			netId = NetworkGetNetworkIdFromEntity(playerPed),
 			coords = GetEntityCoords(playerPed),
@@ -78,7 +80,7 @@ ESX.RegisterUsableItem(Config.GPS.item, function(source)
 		}
 
 		Config.Notification(src, 'GPS activated')
-   		xPlayer.triggerEvent('msk_jobGPS:activateGPS', GPS)
+   		xPlayer.triggerEvent('msk_jobGPS:activateGPS', GPS[playerJobs[src]])
 	end
 end)
 
@@ -131,7 +133,6 @@ CreateThread(function()
     while true do
         local sleep = Config.GPS.refresh * 1000
 
-		-- New Way to refresh PlayerData
 		for job, players in pairs(GPS) do
 			for playerId, info in pairs(players) do
                 -- info = xPlayer, netId, heading
@@ -142,10 +143,11 @@ CreateThread(function()
 			end
 		end
 
-		local xPlayers = ESX.GetExtendedPlayers()
-		for k, xPlayer in pairs(xPlayers) do
-			if GPS[xPlayer.job.name] and GPS[xPlayer.job.name][xPlayer.source] then
-				TriggerClientEvent('msk_jobGPS:refreshBlips', xPlayer.source, GPS)
+		for k, playerId in pairs(GetPlayers()) do
+			local playerJob = getPlayerJob(playerId)
+
+			if GPS[playerJob] and GPS[playerJob][playerId] then
+				TriggerClientEvent('msk_jobGPS:refreshBlips', playerId, GPS[playerJob])
 			end
 		end
 
@@ -153,11 +155,23 @@ CreateThread(function()
     end
 end)
 
+getPlayerJob = function(playerId)
+	if playerJobs[playerId] then 
+		return playerJobs[playerId] 
+	end
+
+	local xPlayer = ESX.GetPlayerFromId(playerId)
+	playerJobs[playerId] = xPlayer.job.name
+
+	return playerJobs[playerId]
+end
+
 removeBlipById = function(xPlayer)
 	local source, job = xPlayer.source, xPlayer.job.name
 
 	if GPS[job] and GPS[job][source] then 
 		GPS[job][source] = nil
+		playerJobs[source] = nil
 
 		for playerId, v in pairs(GPS[job]) do
 			TriggerClientEvent('msk_jobGPS:deactivateGPSById', playerId, source)
