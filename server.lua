@@ -161,7 +161,11 @@ getPlayerJob = function(playerId)
 	end
 
 	local xPlayer = ESX.GetPlayerFromId(playerId)
-	playerJobs[playerId] = xPlayer.job.name
+	if xPlayer then
+		playerJobs[playerId] = xPlayer.job.name
+	else
+		playerJobs[playerId] = 'unemployed'
+	end
 
 	return playerJobs[playerId]
 end
