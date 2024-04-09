@@ -70,8 +70,12 @@ ESX.RegisterUsableItem(Config.GPS.item, function(source)
 		removeBlipById(xPlayer)
 	else
 		local playerPed = GetPlayerPed(src)
-
 		playerJobs[src] = xPlayer.job.name
+
+		for playerId, v in pairs(GPS[playerJobs[src]]) do
+			Config.Notification(playerId, ('%s activated the GPS'):format(xPlayer.name))
+		end
+
 		GPS[playerJobs[src]][src] = {
 			xPlayer = xPlayer,
 			netId = NetworkGetNetworkIdFromEntity(playerPed),
@@ -178,6 +182,7 @@ removeBlipById = function(xPlayer)
 		playerJobs[source] = nil
 
 		for playerId, v in pairs(GPS[job]) do
+			Config.Notification(playerId, ('%s deactivated the GPS'):format(xPlayer.name))
 			TriggerClientEvent('msk_jobGPS:deactivateGPSById', playerId, source)
 		end
 	end
@@ -199,7 +204,7 @@ end
 
 logging = function(code, ...)
     if not Config.Debug then return end
-    MSK.logging(code, ...)
+    MSK.Logging(code, ...)
 end
 
 GithubUpdater = function()

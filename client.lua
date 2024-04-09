@@ -5,6 +5,19 @@ AddEventHandler('esx:onPlayerDeath', function()
     TriggerServerEvent('msk_jobGPS:setDeath')
 end)
 
+if GetResourceState("visn_are") ~= "missing" then
+    local visn_f = exports["visn_are"]:GetSharedFunctions()
+
+    visn_f.HookEventHandler('OnUnconsciousStateChanged', function(newState)
+        if newState then -- Player is Dead
+            isDead = true
+            TriggerServerEvent('msk_jobGPS:setDeath')
+        else -- Player was revived
+            isDead = false
+        end
+    end)
+end
+
 RegisterNetEvent('msk_jobGPS:activateGPS')
 AddEventHandler('msk_jobGPS:activateGPS', function(GPS)
     isActivated = true
