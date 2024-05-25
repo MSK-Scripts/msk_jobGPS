@@ -50,5 +50,5 @@ Config.allowedJobs = {
     ['crips'] = {gps = true, panicbutton = false},
     ['ballas'] = {gps = true, panicbutton = false},
     ['lm'] = {gps = true, panicbutton = false},
-    ['ballas'] = {gps = true, panicbutton = false},
+    ['mg13'] = {gps = true, panicbutton = false},
 }
