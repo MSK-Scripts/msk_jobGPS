@@ -5,36 +5,12 @@ AddEventHandler('esx:onPlayerDeath', function()
     TriggerServerEvent('msk_jobGPS:setDeath')
 end)
 
-RegisterNetEvent('msk_jobGPS:activateGPS')
 AddEventHandler('msk_jobGPS:activateGPS', function(GPS)
     isActivated = true
-    addBlips(GPS)
 end)
 
-RegisterNetEvent('msk_jobGPS:deactivateGPS')
 AddEventHandler('msk_jobGPS:deactivateGPS', function()
     isActivated = false
-	removeBlips()
-end)
-
-RegisterNetEvent('msk_jobGPS:refreshBlips')
-AddEventHandler('msk_jobGPS:refreshBlips', function(GPS)
-    refreshBlips(GPS)
-end)
-
-RegisterNetEvent('msk_jobGPS:deactivateGPSById')
-AddEventHandler('msk_jobGPS:deactivateGPSById', function(source)
-    logging('debug', 'Deactivating Blip by ID')
-    if not activeBlips[source] then return end
-
-    for k, blip in pairs(Blips) do
-        if activeBlips[source].blip == blip then
-            table.remove(k)
-        end
-    end
-
-    RemoveBlip(activeBlips[source].blip)
-    activeBlips[source] = nil
 end)
 
 if Config.Commands.panicbutton.enable then
@@ -60,14 +36,16 @@ end
 
 RegisterNetEvent('msk_jobGPS:activatePanicbutton')
 AddEventHandler('msk_jobGPS:activatePanicbutton', function(xPlayer)
-    if activeBlips[xPlayer.source] then SetBlipColour(activeBlips[xPlayer.source].blip, Config.Panicbutton.blipColor) end
+    local playerId = tonumber(xPlayer.source)
+
+    if activeBlips[playerId] then SetBlipColour(activeBlips[playerId].blip, Config.Panicbutton.blipColor) end
     SetNewWaypoint(xPlayer.coords.x, xPlayer.coords.y)
 end)
 
 addBlips = function(GPS)
     for playerId, v in pairs(GPS) do
-        logging('debug', job, playerId, v)
-        -- v = xPlayer, playerPed, netId, heading
+        logging('debug', playerId, v)
+        -- v = xPlayer, netId, coords, heading
         local xPlayer = v.xPlayer
 
         if ESX.PlayerData.identifier ~= xPlayer.identifier then
@@ -83,7 +61,8 @@ addBlips = function(GPS)
 
             AddTextEntry("BLIP_OTHPLYR", Config.GPS.blip.prefix)
             SetBlipCategory(blip, 7)
-            -- ShowNumberOnBlip(blip, playerId)
+            ShowOutlineIndicatorOnBlip(blip, true)
+	        SetBlipSecondaryColour(blip, 255, 0, 0)
             ShowHeadingIndicatorOnBlip(blip, true)
 
             AddTextEntry("NAME_" .. xPlayer.name, "~a~")
@@ -91,16 +70,14 @@ addBlips = function(GPS)
             AddTextComponentString(xPlayer.name)
             EndTextCommandSetBlipName(blip)
 
-            table.insert(Blips, {blip = blip, source = playerId})
+            Blips[#Blips + 1] = blip
             activeBlips[playerId] = {isActive = false, blip = blip}
         end
     end
 end
+RegisterNetEvent('msk_jobGPS:activateGPS', addBlips)
 
 addBlip = function(GPS, xPlayer, heading)
-    logging('debug', 'addBlip')
-    if ESX.PlayerData.identifier == xPlayer.identifier then return end
-
     logging('debug', 'Add Blip for ' .. xPlayer.source)
     local blip = AddBlipForCoord(xPlayer.coords.x, xPlayer.coords.y, xPlayer.coords.z)
 
@@ -114,7 +91,8 @@ addBlip = function(GPS, xPlayer, heading)
 
     AddTextEntry("BLIP_OTHPLYR", Config.GPS.blip.prefix)
     SetBlipCategory(blip, 7)
-    -- ShowNumberOnBlip(blip, xPlayer.source)
+    ShowOutlineIndicatorOnBlip(blip, true)
+	SetBlipSecondaryColour(blip, 255, 0, 0)
     ShowHeadingIndicatorOnBlip(blip, true)
 
     AddTextEntry("NAME_" .. xPlayer.name, "~a~")
@@ -122,43 +100,32 @@ addBlip = function(GPS, xPlayer, heading)
     AddTextComponentString(xPlayer.name)
     EndTextCommandSetBlipName(blip)
 
-    table.insert(Blips, {blip = blip, source = xPlayer.source})
-    activeBlips[xPlayer.source] = {isActive = false, blip = blip}
-end
-
-removeBlips = function()
-    logging('debug', 'removeBlips')
-
-    for k, blip in pairs(Blips) do
-        RemoveBlip(blip.blip)
-    end
-
-    Blips = {}
-    activeBlips = {}
+    Blips[#Blips + 1] = blip
+    activeBlips[tonumber(xPlayer.source)] = {isActive = false, blip = blip}
 end
 
 refreshBlips = function(GPS)
     logging('debug', 'refreshBlips')
 
     for playerId, v in pairs(GPS) do
-        -- v = xPlayer, netId, heading
+        -- v = xPlayer, netId, coords, heading
         local xPlayer = v.xPlayer
         
         if ESX.PlayerData.identifier ~= xPlayer.identifier then
             if not activeBlips[playerId] then addBlip(GPS, xPlayer, v.heading) end
 
             logging('debug', 'Blip is active')
-            local inOneSync = inOneSync(v.netId)
+            local OneSync = inOneSync(v.netId)
                 
-            if inOneSync and not activeBlips[playerId].isActive then
+            if OneSync and not activeBlips[playerId].isActive then
                 logging('debug', 'inOneSync')
-
+                
                 CreateThread(function()
                     activeBlips[playerId].isActive = true
 
-                    while activeBlips[playerId] and activeBlips[playerId].isActive and DoesEntityExist(inOneSync.ped) do
-                        local coords = GetEntityCoords(inOneSync.ped)
-                        local heading = math.ceil(GetEntityHeading(inOneSync.ped))
+                    while activeBlips[playerId] and activeBlips[playerId].isActive and DoesEntityExist(OneSync.ped) do
+                        local coords = GetEntityCoords(OneSync.ped)
+                        local heading = math.ceil(GetEntityHeading(OneSync.ped))
 
                         SetBlipCoords(activeBlips[playerId].blip, coords.x, coords.y, coords.z)
                         SetBlipRotation(activeBlips[playerId].blip, heading)
@@ -166,7 +133,7 @@ refreshBlips = function(GPS)
                         Wait(0)
                     end
                 end)
-            elseif not inOneSync then
+            elseif not OneSync then
                 logging('debug', 'not inOneSync')
                 activeBlips[playerId].isActive = false
 
@@ -176,6 +143,44 @@ refreshBlips = function(GPS)
         end
     end
 end
+RegisterNetEvent('msk_jobGPS:refreshBlips', refreshBlips)
+
+removeBlips = function()
+    logging('debug', 'removeBlips')
+
+    for k, blip in pairs(Blips) do
+        RemoveBlip(blip)
+    end
+
+    Blips = {}
+    activeBlips = {}
+end
+RegisterNetEvent('msk_jobGPS:deactivateGPS', removeBlips)
+
+removeBlipById = function(playerId, leftServer)
+    if not activeBlips[playerId] then return end
+    if Config.StayActivated.enable then
+        activeBlips[playerId].isActive = false
+        
+        if leftServer then
+            SetBlipColour(activeBlips[playerId].blip, 40)
+        end
+
+        Wait(Config.StayActivated.seconds * 1000)
+    end
+    logging('debug', 'Deactivating Blip by ID for ID: ' .. playerId)
+
+    for k, blip in pairs(Blips) do
+        if activeBlips[playerId].blip == blip then
+            Blips[k] = nil
+            break
+        end
+    end
+
+    RemoveBlip(activeBlips[playerId].blip)
+    activeBlips[playerId] = nil
+end
+RegisterNetEvent('msk_jobGPS:deactivateGPSById', removeBlipById)
 
 inOneSync = function(netId)
     local playerPed = NetworkDoesNetworkIdExist(netId) and NetworkGetEntityFromNetworkId(netId)
@@ -200,5 +205,5 @@ end
 
 logging = function(code, ...)
     if not Config.Debug then return end
-    MSK.logging(code, ...)
+    MSK.Logging(code, ...)
 end

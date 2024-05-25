@@ -1,7 +1,8 @@
 Config = {}
 ----------------------------------------------------------------
-Config.VersionChecker = true
+Config.Locale = 'de'
 Config.Debug = true
+Config.VersionChecker = true
 ----------------------------------------------------------------
 -- !!! This function is clientside AND serverside !!!
 Config.Notification = function(source, message)
@@ -29,7 +30,6 @@ Config.Panicbutton = {
     item = {enable = false, item = 'panicbutton'}, -- You need that item in your inventory if set to true
     hotkey = {enable = true, key = 'f9'}, -- Command has to be activated // RegisterKeyMapping (https://docs.fivem.net/docs/game-references/input-mapper-parameter-ids/keyboard/)
     blipColor = 1, -- This will change the Blipcolor of GPS Blip
-
     notifyNearestPlayers = true,
 }
 ----------------------------------------------------------------
