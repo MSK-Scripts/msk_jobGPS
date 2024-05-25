@@ -4,7 +4,7 @@ games { 'gta5' }
 author 'Musiker15 - MSK Scripts'
 name 'msk_jobGPS'
 description 'Creates Blips for all players at the same job if they activate there gps'
-version '1.3.4'
+version '1.3.5'
 
 shared_script {
     '@es_extended/imports.lua',

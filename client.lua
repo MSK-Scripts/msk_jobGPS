@@ -5,19 +5,6 @@ AddEventHandler('esx:onPlayerDeath', function()
     TriggerServerEvent('msk_jobGPS:setDeath')
 end)
 
-if GetResourceState("visn_are") ~= "missing" then
-    local visn_f = exports["visn_are"]:GetSharedFunctions()
-
-    visn_f.HookEventHandler('OnUnconsciousStateChanged', function(newState)
-        if newState then -- Player is Dead
-            isDead = true
-            TriggerServerEvent('msk_jobGPS:setDeath')
-        else -- Player was revived
-            isDead = false
-        end
-    end)
-end
-
 RegisterNetEvent('msk_jobGPS:activateGPS')
 AddEventHandler('msk_jobGPS:activateGPS', function(GPS)
     isActivated = true
@@ -52,6 +39,9 @@ end)
 
 if Config.Commands.panicbutton.enable then
 	RegisterCommand(Config.Commands.panicbutton.command, function()
+        if not Config.allowedJobs[ESX.PlayerData.job.name] then return end
+        if not Config.allowedJobs[ESX.PlayerData.job.name].panicbutton then return end
+
 		TriggerServerEvent('msk_jobGPS:togglePanicbutton')
 
         if Config.Panicbutton.notifyNearestPlayers then
@@ -74,55 +64,66 @@ AddEventHandler('msk_jobGPS:activatePanicbutton', function(xPlayer)
     SetNewWaypoint(xPlayer.coords.x, xPlayer.coords.y)
 end)
 
-addBlips = function(GPS, Player, heading)
-    logging('debug', 'addBlips')
+addBlips = function(GPS)
+    for playerId, v in pairs(GPS) do
+        logging('debug', job, playerId, v)
+        -- v = xPlayer, playerPed, netId, heading
+        local xPlayer = v.xPlayer
 
-    if not Player then
-        for playerId, v in pairs(GPS) do
-            logging('debug', job, playerId, v)
-            -- v = xPlayer, playerPed, netId, heading
-            local xPlayer = v.xPlayer
+        if ESX.PlayerData.identifier ~= xPlayer.identifier then
+            local blip = AddBlipForCoord(xPlayer.coords.x, xPlayer.coords.y, xPlayer.coords.z)
 
-            if ESX.PlayerData.identifier ~= xPlayer.identifier then
-                local blip = AddBlipForCoord(xPlayer.coords.x, xPlayer.coords.y, xPlayer.coords.z)
+            SetBlipRotation(blip, v.heading)
 
-                SetBlipSprite(blip, Config.GPS.blip.id)
-                SetBlipScale(blip, Config.GPS.blip.scale)
-                SetBlipColour(blip, Config.GPS.blip.color)
+            SetBlipSprite(blip, Config.GPS.blip.id)
+            SetBlipScale(blip, Config.GPS.blip.scale)
+            SetBlipColour(blip, Config.GPS.blip.color)
+            SetBlipDisplay(blip, 2)
+            SetBlipAsShortRange(blip, true)
 
-                ShowNumberOnBlip(blip, playerId)
-                ShowHeadingIndicatorOnBlip(blip, true)
-                SetBlipRotation(blip, v.heading)
+            AddTextEntry("BLIP_OTHPLYR", Config.GPS.blip.prefix)
+            SetBlipCategory(blip, 7)
+            -- ShowNumberOnBlip(blip, playerId)
+            ShowHeadingIndicatorOnBlip(blip, true)
 
-                BeginTextCommandSetBlipName('STRING')
-                AddTextComponentString(('%s'):format(xPlayer.name))
-                EndTextCommandSetBlipName(blip)
+            AddTextEntry("NAME_" .. xPlayer.name, "~a~")
+            BeginTextCommandSetBlipName("NAME_" .. xPlayer.name)
+            AddTextComponentString(xPlayer.name)
+            EndTextCommandSetBlipName(blip)
 
-                table.insert(Blips, {blip = blip, source = playerId})
-                activeBlips[playerId] = {isActive = false, blip = blip}
-            end
+            table.insert(Blips, {blip = blip, source = playerId})
+            activeBlips[playerId] = {isActive = false, blip = blip}
         end
-    else
-        local xPlayer = Player
-        if ESX.PlayerData.identifier == xPlayer.identifier then return end
-        logging('debug', 'Add Blip for ' .. xPlayer.source)
-        local blip = AddBlipForCoord(xPlayer.coords.x, xPlayer.coords.y, xPlayer.coords.z)
-
-        SetBlipSprite(blip, Config.GPS.blip.id)
-        SetBlipScale(blip, Config.GPS.blip.scale)
-        SetBlipColour(blip, Config.GPS.blip.color)
-
-        ShowNumberOnBlip(blip, xPlayer.source)
-        ShowHeadingIndicatorOnBlip(blip, true)
-        SetBlipRotation(blip, heading)
-
-        BeginTextCommandSetBlipName('STRING')
-        AddTextComponentString(('%s'):format(xPlayer.name))
-        EndTextCommandSetBlipName(blip)
-
-        table.insert(Blips, {blip = blip, source = xPlayer.source})
-        activeBlips[xPlayer.source] = {isActive = false, blip = blip}
     end
+end
+
+addBlip = function(GPS, xPlayer, heading)
+    logging('debug', 'addBlip')
+    if ESX.PlayerData.identifier == xPlayer.identifier then return end
+
+    logging('debug', 'Add Blip for ' .. xPlayer.source)
+    local blip = AddBlipForCoord(xPlayer.coords.x, xPlayer.coords.y, xPlayer.coords.z)
+
+    SetBlipRotation(blip, heading)
+
+    SetBlipSprite(blip, Config.GPS.blip.id)
+    SetBlipScale(blip, Config.GPS.blip.scale)
+    SetBlipColour(blip, Config.GPS.blip.color)
+    SetBlipDisplay(blip, 2)
+    SetBlipAsShortRange(blip, true)
+
+    AddTextEntry("BLIP_OTHPLYR", Config.GPS.blip.prefix)
+    SetBlipCategory(blip, 7)
+    -- ShowNumberOnBlip(blip, xPlayer.source)
+    ShowHeadingIndicatorOnBlip(blip, true)
+
+    AddTextEntry("NAME_" .. xPlayer.name, "~a~")
+    BeginTextCommandSetBlipName("NAME_" .. xPlayer.name)
+    AddTextComponentString(xPlayer.name)
+    EndTextCommandSetBlipName(blip)
+
+    table.insert(Blips, {blip = blip, source = xPlayer.source})
+    activeBlips[xPlayer.source] = {isActive = false, blip = blip}
 end
 
 removeBlips = function()
@@ -144,7 +145,7 @@ refreshBlips = function(GPS)
         local xPlayer = v.xPlayer
         
         if ESX.PlayerData.identifier ~= xPlayer.identifier then
-            if not activeBlips[playerId] then addBlips(GPS, xPlayer, v.heading) end
+            if not activeBlips[playerId] then addBlip(GPS, xPlayer, v.heading) end
 
             logging('debug', 'Blip is active')
             local inOneSync = inOneSync(v.netId)

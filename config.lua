@@ -12,9 +12,16 @@ Config.Notification = function(source, message)
     end
 end
 ----------------------------------------------------------------
+Config.StayActivated = {
+    -- If set to true and someone deactivate the GPS then the Blip will be removed after X seconds.
+    -- If set to false and someone deactivated the GPS then the Blip will be removed immediately.
+    enable = true,
+    seconds = 60
+}
+
 Config.GPS = {
-    item = 'gps',
-    blip = {id = 1, color = 5, scale = 0.8},
+    item = 'tracker',
+    blip = {id = 1, color = 2, scale = 0.7, prefix = 'GPS'},
     refresh = 2.5 -- in seconds // Refreshtime if player is not in OneSync distance
 }
 
@@ -28,17 +35,20 @@ Config.Panicbutton = {
 ----------------------------------------------------------------
 Config.Commands = {
     gps = {enable = true, command = 'toggleGPS'},
-    panicbutton = {enable = true, command = 'togglePanic'}
+    panicbutton = {enable = true, command = 'togglePanic'} -- If you set to false then the hotkey doesn't work
 }
 ----------------------------------------------------------------
 Config.allowedJobs = {
     ['police'] = {gps = true, panicbutton = true},
     ['ambulance'] = {gps = true, panicbutton = true},
     ['justice'] = {gps = true, panicbutton = true},
+    ['doj'] = {gps = true, panicbutton = true},
 
     ['bloods'] = {gps = true, panicbutton = false},
     ['grove'] = {gps = true, panicbutton = false},
     ['vagos'] = {gps = true, panicbutton = false},
     ['crips'] = {gps = true, panicbutton = false},
+    ['ballas'] = {gps = true, panicbutton = false},
+    ['lm'] = {gps = true, panicbutton = false},
     ['ballas'] = {gps = true, panicbutton = false},
 }
