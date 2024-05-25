@@ -1,4 +1,4 @@
-Transalation = {
+Translation = {
     ['de'] = {
         ['gps_activated'] = 'Du hast dein GPS aktiviert',
         ['gps_deactivated'] = 'Du hast dein GPS deaktiviert',
