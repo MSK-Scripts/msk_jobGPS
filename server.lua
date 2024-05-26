@@ -47,6 +47,7 @@ togglePanicbutton = function(source)
 
 	if not GPS[xPlayer.job.name][tonumber(src)] then canUseItem = false end
 	if not canUseItem then return Config.Notification(src, Translation[Config.Locale]['panic_activate_GPS']) end
+	Config.Notification(src, Translation[Config.Locale]['panic_pressed'])
 
 	for playerId, info in pairs(GPS[xPlayer.job.name]) do
 		if tonumber(playerId) ~= tonumber(src) then
@@ -128,7 +129,7 @@ AddEventHandler('esx:onRemoveInventoryItem', function(source, item, count)
 		TriggerClientEvent('msk_jobGPS:deactivateGPS', src)
 		removeBlipById(xPlayer)
 
-		for playerId, v in pairs(GPS[playerJob]) do
+		for playerId, v in pairs(GPS[xPlayer.job.name]) do
 			Config.Notification(playerId, Translation[Config.Locale]['gps_removed_inventory']:format(xPlayer.name))
 		end
 	end
@@ -180,7 +181,6 @@ removeBlipById = function(xPlayer, leftServer)
 
 	if GPS[job] and GPS[job][tonumber(source)] then 
 		GPS[job][tonumber(source)] = nil
-		playerJobs[tonumber(source)] = nil
 
 		for playerId, v in pairs(GPS[job]) do
 			Config.Notification(playerId, Translation[Config.Locale]['gps_deactivated_all']:format(xPlayer.name))

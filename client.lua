@@ -159,6 +159,7 @@ RegisterNetEvent('msk_jobGPS:deactivateGPS', removeBlips)
 
 removeBlipById = function(playerId, leftServer)
     if not activeBlips[playerId] then return end
+
     if Config.StayActivated.enable then
         activeBlips[playerId].isActive = false
         
