@@ -9,6 +9,8 @@ Translation = {
         ['panic_pressed'] = 'Panicbutton gedrückt',
         ['panic_activate_GPS'] = 'Du musst erst dein GPS aktivieren!',
         ['panic_activated'] = '%s hat den Panicbutton ausgelöst!',
+
+        ['someone'] = 'Jemand',
     },
     ['en'] = {
         ['gps_activated'] = 'You activated the GPS',
@@ -20,5 +22,7 @@ Translation = {
         ['panic_pressed'] = 'Panicbutton pressed',
         ['panic_activate_GPS'] = 'You have to active GPS first!',
         ['panic_activated'] = '%s has activated Panicbutton!',
+
+        ['someone'] = 'Someone',
     }
 }

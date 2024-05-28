@@ -1,23 +1,28 @@
 Config = {}
 ----------------------------------------------------------------
 Config.Locale = 'de'
-Config.Debug = true
+Config.Debug = false
 Config.VersionChecker = true
 ----------------------------------------------------------------
 -- !!! This function is clientside AND serverside !!!
-Config.Notification = function(source, message)
+Config.Notification = function(source, message, info)
     if IsDuplicityVersion() then -- serverside
-        MSK.Notification(source, 'MSK JobGPS', message)
+        MSK.Notification(source, 'MSK JobGPS', message, info)
     else -- clientside
-        MSK.Notification('MSK JobGPS', message)
+        MSK.Notification('MSK JobGPS', message, info)
     end
 end
 ----------------------------------------------------------------
 Config.StayActivated = {
     -- If set to true and someone deactivate the GPS then the Blip will be removed after X seconds.
     -- If set to false and someone deactivated the GPS then the Blip will be removed immediately.
-    enable = true,
-    seconds = 60
+    enable = true, -- Set to false to deactivated this feature completely
+    seconds = 60,
+
+    ['stayOnDeactivate'] = false,
+    ['stayOnLeaveServer'] = true,
+    ['stayOnDeath'] = true,
+    ['stayOnRemoveItem'] = true,
 }
 
 Config.GPS = {
@@ -27,6 +32,7 @@ Config.GPS = {
 }
 
 Config.Panicbutton = {
+    enable = true, -- Set false to deactivated this feature completely
     item = {enable = false, item = 'panicbutton'}, -- You need that item in your inventory if set to true
     hotkey = {enable = true, key = 'f9'}, -- Command has to be activated // RegisterKeyMapping (https://docs.fivem.net/docs/game-references/input-mapper-parameter-ids/keyboard/)
     blipColor = 1, -- This will change the Blipcolor of GPS Blip
@@ -49,6 +55,6 @@ Config.allowedJobs = {
     ['vagos'] = {gps = true, panicbutton = false},
     ['crips'] = {gps = true, panicbutton = false},
     ['ballas'] = {gps = true, panicbutton = false},
-    ['lm'] = {gps = true, panicbutton = false},
     ['mg13'] = {gps = true, panicbutton = false},
+    ['lm'] = {gps = true, panicbutton = false},
 }

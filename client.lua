@@ -13,7 +13,7 @@ AddEventHandler('msk_jobGPS:deactivateGPS', function()
     isActivated = false
 end)
 
-if Config.Commands.panicbutton.enable then
+if Config.Panicbutton.enable and Config.Commands.panicbutton.enable then
 	RegisterCommand(Config.Commands.panicbutton.command, function()
         if not Config.allowedJobs[ESX.PlayerData.job.name] then return end
         if not Config.allowedJobs[ESX.PlayerData.job.name].panicbutton then return end
@@ -157,17 +157,16 @@ removeBlips = function()
 end
 RegisterNetEvent('msk_jobGPS:deactivateGPS', removeBlips)
 
-removeBlipById = function(playerId, leftServer)
+removeBlipById = function(playerId, reason)
     if not activeBlips[playerId] then return end
 
     if Config.StayActivated.enable then
         activeBlips[playerId].isActive = false
-        
-        if leftServer then
-            SetBlipColour(activeBlips[playerId].blip, 40)
-        end
 
-        Wait(Config.StayActivated.seconds * 1000)
+        if Config.StayActivated[reason] then
+            SetBlipColour(activeBlips[playerId].blip, 40)
+            Wait(Config.StayActivated.seconds * 1000)
+        end
     end
     logging('debug', 'Deactivating Blip by ID for ID: ' .. playerId)
 
@@ -188,20 +187,6 @@ inOneSync = function(netId)
 
     if DoesEntityExist(playerPed) then return {ped = playerPed} end
     return false
-end
-
-isAllowed = function(xPlayer, action)
-	for job, v in pairs(Config.allowedJobs) do
-		if xPlayer.job.name == job then
-			if action == 'gps' and v.gps then
-				return true
-			elseif action == 'panic' and v.panicbutton then
-				return true
-			end
-		end
-	end
-
-	return false
 end
 
 logging = function(code, ...)

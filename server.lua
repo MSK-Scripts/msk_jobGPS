@@ -15,7 +15,7 @@ if Config.Commands.gps.enable then
 	end)
 end
 
-if Config.Panicbutton.item.enable then
+if Config.Panicbutton.enable and Config.Panicbutton.item.enable then
 	ESX.RegisterUsableItem(Config.Panicbutton.item.item, function(source)
 		togglePanicbutton(source)
 	end)
@@ -26,16 +26,18 @@ RegisterNetEvent('msk_jobGPS:togglePanicbutton', function()
 	togglePanicbutton(src)
 end)
 
-RegisterNetEvent('msk_jobGPS:notifyNearestPlayers', function(playerId)
-	Config.Notification(playerId, Translation[Config.Locale]['panic_activated']:format('Der Spieler'))
+RegisterNetEvent('msk_jobGPS:notifyNearestPlayers', function(targetId)
+	Config.Notification(targetId, Translation[Config.Locale]['panic_activated']:format(Translation[Config.Locale]['someone']), 'warning')
 end)
 
 togglePanicbutton = function(source)
+	if not Config.Panicbutton.enable then return end
 	local src = source
 	local xPlayer = ESX.GetPlayerFromId(src)
 	local canUseItem = true
 
-	if not isAllowed(xPlayer, 'panic') then return end
+	if not Config.allowedJobs[xPlayer.job.name] then return end
+	if not Config.allowedJobs[xPlayer.job.name].panicbutton then return end
 
 	if Config.Panicbutton.item.enable then
 		local hasItem = xPlayer.hasItem(Config.Panicbutton.item.item)
@@ -46,13 +48,13 @@ togglePanicbutton = function(source)
 	end
 
 	if not GPS[xPlayer.job.name][tonumber(src)] then canUseItem = false end
-	if not canUseItem then return Config.Notification(src, Translation[Config.Locale]['panic_activate_GPS']) end
-	Config.Notification(src, Translation[Config.Locale]['panic_pressed'])
+	if not canUseItem then return Config.Notification(src, Translation[Config.Locale]['panic_activate_GPS'], 'error') end
+	Config.Notification(src, Translation[Config.Locale]['panic_pressed'], 'info')
 
 	for playerId, info in pairs(GPS[xPlayer.job.name]) do
 		if tonumber(playerId) ~= tonumber(src) then
 			TriggerClientEvent('msk_jobGPS:activatePanicbutton', playerId, xPlayer)
-			Config.Notification(playerId, Translation[Config.Locale]['panic_activated']:format(xPlayer.name))
+			Config.Notification(playerId, Translation[Config.Locale]['panic_activated']:format(xPlayer.name), 'warning')
 		end
 	end
 end
@@ -61,18 +63,19 @@ ESX.RegisterUsableItem(Config.GPS.item, function(source)
 	local src = source
    	local xPlayer = ESX.GetPlayerFromId(src)
 
-	if not isAllowed(xPlayer, 'gps') then return end
+	if not Config.allowedJobs[xPlayer.job.name] then return end
+	if not Config.allowedJobs[xPlayer.job.name].gps then return end
 
 	if GPS[xPlayer.job.name][tonumber(src)] then
-		Config.Notification(src, Translation[Config.Locale]['gps_deactivated'])
+		Config.Notification(src, Translation[Config.Locale]['gps_deactivated'], 'info')
 		TriggerClientEvent('msk_jobGPS:deactivateGPS', src)
-		removeBlipById(xPlayer)
+		removeBlipById(xPlayer, 'stayOnDeactivate')
 	else
 		local playerPed, playerJob = GetPlayerPed(src), xPlayer.job.name
 		playerJobs[tonumber(src)] = playerJob
 
 		for playerId, v in pairs(GPS[playerJob]) do
-			Config.Notification(playerId, Translation[Config.Locale]['gps_activated_all']:format(xPlayer.name))
+			Config.Notification(playerId, Translation[Config.Locale]['gps_activated_all']:format(xPlayer.name), 'info')
 		end
 
 		GPS[playerJob][tonumber(src)] = {
@@ -82,7 +85,7 @@ ESX.RegisterUsableItem(Config.GPS.item, function(source)
 			heading = math.ceil(GetEntityHeading(playerPed))
 		}
 
-		Config.Notification(src, Translation[Config.Locale]['gps_activated'])
+		Config.Notification(src, Translation[Config.Locale]['gps_activated'], 'info')
 		TriggerClientEvent('msk_jobGPS:activateGPS', src, GPS[playerJob])
 	end
 end)
@@ -91,34 +94,37 @@ RegisterNetEvent('esx:playerLogout', function(source)
     local src = source
 	local xPlayer = ESX.GetPlayerFromId(src)
 
-	removeBlipById(xPlayer, true)
+	removeBlipById(xPlayer, 'stayOnLeaveServer')
 end)
 
 RegisterNetEvent('esx:playerDropped', function(playerId, reason)
 	local src = playerId
 	local xPlayer = ESX.GetPlayerFromId(src)
 
-	removeBlipById(xPlayer, true)
+	removeBlipById(xPlayer, 'stayOnLeaveServer')
 end)
 
 RegisterNetEvent("esx:setJob", function(playerId, newJob, oldJob)
 	if newJob.name == oldJob.name then return end
 	local src = playerId
 	local xPlayer = ESX.GetPlayerFromId(src)
-	if not GPS[oldJob.name] or not GPS[oldJob.name][tonumber(src)] then return end
+	if not GPS[oldJob.name] then return end
+	if not not GPS[oldJob.name][tonumber(src)] then return end
 
-	Config.Notification(src, Translation[Config.Locale]['gps_deactivated'])
+	Config.Notification(src, Translation[Config.Locale]['gps_deactivated'], 'info')
 	TriggerClientEvent('msk_jobGPS:deactivateGPS', src)
-	removeBlipById(xPlayer)
+	removeBlipById(xPlayer, 'stayOnJobChange')
 end)
 
 RegisterNetEvent('msk_jobGPS:setDeath', function()
 	local src = source
    	local xPlayer = ESX.GetPlayerFromId(src)
+	if not GPS[xPlayer.job.name] then return end
+	if not GPS[xPlayer.job.name][tonumber(xPlayer.source)] then return end
 
-	Config.Notification(src, Translation[Config.Locale]['gps_deactivated'])
+	Config.Notification(src, Translation[Config.Locale]['gps_deactivated'], 'info')
 	TriggerClientEvent('msk_jobGPS:deactivateGPS', src)
-	removeBlipById(xPlayer)
+	removeBlipById(xPlayer, 'stayOnDeath')
 end)
 
 AddEventHandler('esx:onRemoveInventoryItem', function(source, item, count)
@@ -126,11 +132,14 @@ AddEventHandler('esx:onRemoveInventoryItem', function(source, item, count)
 	local xPlayer = ESX.GetPlayerFromId(src)
 	
 	if item == Config.GPS.item and count == 0 then
+		if not GPS[xPlayer.job.name] then return end
+		if not GPS[xPlayer.job.name][tonumber(xPlayer.source)] then return end
+
 		TriggerClientEvent('msk_jobGPS:deactivateGPS', src)
-		removeBlipById(xPlayer)
+		removeBlipById(xPlayer, 'stayOnRemoveItem')
 
 		for playerId, v in pairs(GPS[xPlayer.job.name]) do
-			Config.Notification(playerId, Translation[Config.Locale]['gps_removed_inventory']:format(xPlayer.name))
+			Config.Notification(playerId, Translation[Config.Locale]['gps_removed_inventory']:format(xPlayer.name), 'warning')
 		end
 	end
 end)
@@ -176,31 +185,17 @@ getPlayerJob = function(playerId)
 	return playerJobs[playerId] or 'unemployed'
 end
 
-removeBlipById = function(xPlayer, leftServer)
+removeBlipById = function(xPlayer, reason)
 	local source, job = xPlayer.source, xPlayer.job.name
 
 	if GPS[job] and GPS[job][tonumber(source)] then 
 		GPS[job][tonumber(source)] = nil
 
 		for playerId, v in pairs(GPS[job]) do
-			Config.Notification(playerId, Translation[Config.Locale]['gps_deactivated_all']:format(xPlayer.name))
-			TriggerClientEvent('msk_jobGPS:deactivateGPSById', playerId, tonumber(source), leftServer)
+			Config.Notification(playerId, Translation[Config.Locale]['gps_deactivated_all']:format(xPlayer.name), 'info')
+			TriggerClientEvent('msk_jobGPS:deactivateGPSById', playerId, tonumber(source), reason)
 		end
 	end
-end
-
-isAllowed = function(xPlayer, action)
-	for job, v in pairs(Config.allowedJobs) do
-		if xPlayer.job.name == job then
-			if action == 'gps' and v.gps then
-				return true
-			elseif action == 'panic' and v.panicbutton then
-				return true
-			end
-		end
-	end
-
-	return false
 end
 
 logging = function(code, ...)
@@ -209,12 +204,12 @@ logging = function(code, ...)
 end
 
 GithubUpdater = function()
-    GetCurrentVersion = function()
+    local GetCurrentVersion = function()
 	    return GetResourceMetadata( GetCurrentResourceName(), "version" )
     end
     
     local CurrentVersion = GetCurrentVersion()
-    local resourceName = "^4["..GetCurrentResourceName().."]^0"
+    local resourceName = "[^2"..GetCurrentResourceName().."^0]"
 
     if Config.VersionChecker then
         PerformHttpRequest('https://raw.githubusercontent.com/MSK-Scripts/msk_jobGPS/main/VERSION', function(Error, NewestVersion, Header)
@@ -228,9 +223,7 @@ GithubUpdater = function()
             print("###############################")
         end)
     else
-        print("###############################")
         print(resourceName .. '^2 ✓ Resource loaded^0')
-        print("###############################")
     end
 end
 GithubUpdater()
