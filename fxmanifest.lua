@@ -6,6 +6,8 @@ name 'msk_jobGPS'
 description 'Creates Blips for all players at the same job if they activate there gps'
 version '1.4.0'
 
+lua54 'yes'
+
 shared_script {
     '@es_extended/imports.lua',
     '@msk_core/import.lua',
