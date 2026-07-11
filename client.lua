@@ -159,8 +159,8 @@ removeBlipById = function(playerId, reason)
             SetBlipColour(activeBlips[playerId].blip, 40)
             Wait(Config.StayActivated.seconds * 1000)
 
-            -- Waehrend des Waits kann removeBlips() (deactivateGPS) gelaufen sein
-            -- und activeBlips geleert haben -> erneut pruefen, sonst nil-Zugriff.
+            -- During the wait removeBlips() (deactivateGPS) may have run
+            -- and cleared activeBlips -> re-check, otherwise nil access.
             if not activeBlips[playerId] then return end
         end
     end

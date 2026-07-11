@@ -47,7 +47,7 @@ togglePanicbutton = function(source)
 	if not GPS[xPlayer.job.name][tonumber(src)] then canUseItem = false end
 	if not canUseItem then return Config.Notification(src, Translation[Config.Locale]['panic_activate_GPS'], 'error') end
 
-	-- Serverseitiges Rate-Limit gegen Spam.
+	-- Serverside rate limit against spam.
 	local cooldown = (Config.Panicbutton.cooldown or 0) * 1000
 	if cooldown > 0 then
 		local now = GetGameTimer()
@@ -58,7 +58,7 @@ togglePanicbutton = function(source)
 	Config.Notification(src, Translation[Config.Locale]['panic_pressed'], 'info')
 
 	local job = xPlayer.job.name
-	-- Nur source + coords senden, nicht das komplette ESX-Objekt.
+	-- Only send source + coords, not the whole ESX object.
 	local panicData = { source = tonumber(src), coords = GetEntityCoords(GetPlayerPed(src)) }
 
 	for playerId, info in pairs(GPS[job]) do
@@ -73,8 +73,8 @@ togglePanicbutton = function(source)
 	end
 end
 
--- Serverseitige Nachbar-Benachrichtigung. Distanz wird hier geprueft, nicht auf dem Client,
--- damit keine beliebigen Ziel-IDs von aussen uebergeben werden koennen.
+-- Serverside neighbour notification. Distance is checked here, not on the client,
+-- so no arbitrary target IDs can be passed in from outside.
 notifyNearestPlayers = function(src, job)
 	local presserCoords = GetEntityCoords(GetPlayerPed(src))
 	local radius = Config.Panicbutton.radius or 8.0
@@ -82,7 +82,7 @@ notifyNearestPlayers = function(src, job)
 	for _, playerId in ipairs(GetPlayers()) do
 		playerId = tonumber(playerId)
 
-		-- Job-Kollegen mit aktivem GPS wurden bereits benachrichtigt -> nicht doppelt melden
+		-- Job colleagues with active GPS were already notified -> don't notify twice
 		if playerId ~= tonumber(src) and not (GPS[job] and GPS[job][playerId]) then
 			local targetPed = GetPlayerPed(playerId)
 
@@ -113,8 +113,8 @@ ESX.RegisterUsableItem(Config.GPS.item, function(source)
 		end
 
 		GPS[playerJob][tonumber(src)] = {
-			-- Nur die Felder, die der Client wirklich braucht. NICHT das komplette
-			-- ESX-Objekt (das enthaelt accounts, inventory, license, ssn, ...).
+			-- Only the fields the client actually needs. NOT the whole
+			-- ESX object (which holds accounts, inventory, license, ssn, ...).
 			xPlayer = {
 				source = tonumber(src),
 				name = xPlayer.name,
@@ -131,7 +131,7 @@ ESX.RegisterUsableItem(Config.GPS.item, function(source)
 	end
 end)
 
--- Serverinterne ESX-Events -> AddEventHandler, damit Clients sie nicht faken koennen.
+-- Serverside-only ESX events -> AddEventHandler so clients cannot fake them.
 AddEventHandler('esx:playerLogout', function(source)
 	removeBlipByAnyJob(source, 'stayOnLeaveServer')
 end)
@@ -167,34 +167,66 @@ RegisterNetEvent('msk_jobGPS:setDeath', function()
 	removeBlipById(src, xPlayer.job.name, 'stayOnDeath')
 end)
 
-AddEventHandler('esx:onRemoveInventoryItem', function(source, item, count)
-	local src = source
-	local xPlayer = ESX.GetPlayerFromId(src)
-	
-	if item == Config.GPS.item and count == 0 then
-		if not GPS[xPlayer.job.name] then return end
-		if not GPS[xPlayer.job.name][tonumber(src)] then return end
+-- Deactivates a player's GPS when he lost the tracker item.
+-- Called both by the ESX event (default inventory) and by the ownership poll
+-- in the refresh loop (ox_inventory and others).
+handleGpsItemRemoved = function(src, job)
+	src = tonumber(src)
+	local entry = GPS[job] and GPS[job][src]
+	if not entry then return end
 
-		TriggerClientEvent('msk_jobGPS:deactivateGPS', src)
-		removeBlipById(src, xPlayer.job.name, 'stayOnRemoveItem')
+	local name = entry.xPlayer and entry.xPlayer.name or 'Unknown'
 
-		for playerId, v in pairs(GPS[xPlayer.job.name]) do
-			Config.Notification(playerId, Translation[Config.Locale]['gps_removed_inventory']:format(xPlayer.name), 'warning')
-		end
+	TriggerClientEvent('msk_jobGPS:deactivateGPS', src)
+	removeBlipById(src, job, 'stayOnRemoveItem')
+
+	for playerId, v in pairs(GPS[job]) do
+		Config.Notification(playerId, Translation[Config.Locale]['gps_removed_inventory']:format(name), 'warning')
 	end
+end
+
+-- ESX default inventory: fires immediately on removal. ox_inventory does NOT
+-- fire this event, so the ownership poll in the refresh loop covers it instead.
+AddEventHandler('esx:onRemoveInventoryItem', function(source, item, count)
+	if item ~= Config.GPS.item or count ~= 0 then return end
+	handleGpsItemRemoved(source, getPlayerJob(source))
 end)
+
+-- Inventory-agnostic check whether the player still owns the GPS tracker item.
+playerHasGpsItem = function(playerId)
+	local item = MSK.HasItem(playerId, Config.GPS.item)
+
+	if type(item) == 'table' then
+		return (item.count or 0) > 0
+	end
+
+	return (tonumber(item) or 0) > 0
+end
 
 CreateThread(function()
     while true do
         local sleep = Config.GPS.refresh * 1000
 
 		for job, players in pairs(GPS) do
+			local lostItem = {}
+
 			for playerId, info in pairs(players) do
                 -- info = xPlayer, netId, coords, heading
 				local playerPed = GetPlayerPed(playerId)
 
 				GPS[job][playerId].coords = GetEntityCoords(playerPed)
 				GPS[job][playerId].heading = math.ceil(GetEntityHeading(playerPed))
+
+				-- ox_inventory and others don't fire esx:onRemoveInventoryItem -> check ownership here.
+				-- Only check with a loaded ped so a still-loading player is not deactivated by mistake.
+				if playerPed ~= 0 and not playerHasGpsItem(playerId) then
+					lostItem[#lostItem + 1] = playerId
+				end
+			end
+
+			-- Deactivate only after iterating, so we don't delete from players during pairs().
+			for _, playerId in ipairs(lostItem) do
+				handleGpsItemRemoved(playerId, job)
 			end
 		end
 
@@ -230,8 +262,8 @@ removeBlipById = function(source, jobName, reason)
 	local entry = GPS[jobName] and GPS[jobName][source]
 	if not entry then return end
 
-	-- Name aus dem gespeicherten Eintrag lesen, damit es auch funktioniert,
-	-- wenn das ESX-Objekt beim Disconnect bereits entfernt wurde.
+	-- Read the name from the stored entry so it still works
+	-- when the ESX object was already removed on disconnect.
 	local name = entry.xPlayer and entry.xPlayer.name or 'Unknown'
 	GPS[jobName][source] = nil
 
@@ -241,8 +273,8 @@ removeBlipById = function(source, jobName, reason)
 	end
 end
 
--- Entfernt einen Spieler aus dem Job-Table, in dem er tatsaechlich eingetragen ist.
--- Fuer Faelle (Disconnect), in denen der aktuelle Job nicht mehr sicher ermittelbar ist.
+-- Removes a player from the job table he is actually registered in.
+-- For cases (disconnect) where the current job can no longer be reliably determined.
 removeBlipByAnyJob = function(source, reason)
 	source = tonumber(source)
 
