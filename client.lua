@@ -19,14 +19,6 @@ if Config.Panicbutton.enable and Config.Commands.panicbutton.enable then
         if not Config.allowedJobs[ESX.PlayerData.job.name].panicbutton then return end
 
 		TriggerServerEvent('msk_jobGPS:togglePanicbutton')
-
-        if Config.Panicbutton.notifyNearestPlayers then
-            local players = ESX.Game.GetPlayersInArea(GetEntityCoords(PlayerPedId()), 8.0)
-            
-            for k, player in pairs(players) do
-                TriggerServerEvent('msk_jobGPS:notifyNearestPlayers', GetPlayerServerId(player))
-            end
-        end
 	end)
 
     if Config.Panicbutton.hotkey.enable then
@@ -166,6 +158,10 @@ removeBlipById = function(playerId, reason)
         if Config.StayActivated[reason] then
             SetBlipColour(activeBlips[playerId].blip, 40)
             Wait(Config.StayActivated.seconds * 1000)
+
+            -- Waehrend des Waits kann removeBlips() (deactivateGPS) gelaufen sein
+            -- und activeBlips geleert haben -> erneut pruefen, sonst nil-Zugriff.
+            if not activeBlips[playerId] then return end
         end
     end
     logging('debug', 'Deactivating Blip by ID for ID: ' .. playerId)

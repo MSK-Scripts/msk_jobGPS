@@ -1,5 +1,6 @@
 local GPS = {}
 local playerJobs = {}
+local panicCooldowns = {}
 
 AddEventHandler('onResourceStart', function(resource)
 	if GetCurrentResourceName() == resource then
@@ -26,10 +27,6 @@ RegisterNetEvent('msk_jobGPS:togglePanicbutton', function()
 	togglePanicbutton(src)
 end)
 
-RegisterNetEvent('msk_jobGPS:notifyNearestPlayers', function(targetId)
-	Config.Notification(targetId, Translation[Config.Locale]['panic_activated']:format(Translation[Config.Locale]['someone']), 'warning')
-end)
-
 togglePanicbutton = function(source)
 	if not Config.Panicbutton.enable then return end
 	local src = source
@@ -49,12 +46,49 @@ togglePanicbutton = function(source)
 
 	if not GPS[xPlayer.job.name][tonumber(src)] then canUseItem = false end
 	if not canUseItem then return Config.Notification(src, Translation[Config.Locale]['panic_activate_GPS'], 'error') end
+
+	-- Serverseitiges Rate-Limit gegen Spam.
+	local cooldown = (Config.Panicbutton.cooldown or 0) * 1000
+	if cooldown > 0 then
+		local now = GetGameTimer()
+		if panicCooldowns[src] and now - panicCooldowns[src] < cooldown then return end
+		panicCooldowns[src] = now
+	end
+
 	Config.Notification(src, Translation[Config.Locale]['panic_pressed'], 'info')
 
-	for playerId, info in pairs(GPS[xPlayer.job.name]) do
+	local job = xPlayer.job.name
+	-- Nur source + coords senden, nicht das komplette ESX-Objekt.
+	local panicData = { source = tonumber(src), coords = GetEntityCoords(GetPlayerPed(src)) }
+
+	for playerId, info in pairs(GPS[job]) do
 		if tonumber(playerId) ~= tonumber(src) then
-			TriggerClientEvent('msk_jobGPS:activatePanicbutton', playerId, xPlayer)
+			TriggerClientEvent('msk_jobGPS:activatePanicbutton', playerId, panicData)
 			Config.Notification(playerId, Translation[Config.Locale]['panic_activated']:format(xPlayer.name), 'warning')
+		end
+	end
+
+	if Config.Panicbutton.notifyNearestPlayers then
+		notifyNearestPlayers(src, job)
+	end
+end
+
+-- Serverseitige Nachbar-Benachrichtigung. Distanz wird hier geprueft, nicht auf dem Client,
+-- damit keine beliebigen Ziel-IDs von aussen uebergeben werden koennen.
+notifyNearestPlayers = function(src, job)
+	local presserCoords = GetEntityCoords(GetPlayerPed(src))
+	local radius = Config.Panicbutton.radius or 8.0
+
+	for _, playerId in ipairs(GetPlayers()) do
+		playerId = tonumber(playerId)
+
+		-- Job-Kollegen mit aktivem GPS wurden bereits benachrichtigt -> nicht doppelt melden
+		if playerId ~= tonumber(src) and not (GPS[job] and GPS[job][playerId]) then
+			local targetPed = GetPlayerPed(playerId)
+
+			if targetPed and targetPed ~= 0 and #(presserCoords - GetEntityCoords(targetPed)) <= radius then
+				Config.Notification(playerId, Translation[Config.Locale]['panic_activated']:format(Translation[Config.Locale]['someone']), 'warning')
+			end
 		end
 	end
 end
@@ -69,7 +103,7 @@ ESX.RegisterUsableItem(Config.GPS.item, function(source)
 	if GPS[xPlayer.job.name][tonumber(src)] then
 		Config.Notification(src, Translation[Config.Locale]['gps_deactivated'], 'info')
 		TriggerClientEvent('msk_jobGPS:deactivateGPS', src)
-		removeBlipById(xPlayer, 'stayOnDeactivate')
+		removeBlipById(src, xPlayer.job.name, 'stayOnDeactivate')
 	else
 		local playerPed, playerJob = GetPlayerPed(src), xPlayer.job.name
 		playerJobs[tonumber(src)] = playerJob
@@ -79,7 +113,14 @@ ESX.RegisterUsableItem(Config.GPS.item, function(source)
 		end
 
 		GPS[playerJob][tonumber(src)] = {
-			xPlayer = xPlayer,
+			-- Nur die Felder, die der Client wirklich braucht. NICHT das komplette
+			-- ESX-Objekt (das enthaelt accounts, inventory, license, ssn, ...).
+			xPlayer = {
+				source = tonumber(src),
+				name = xPlayer.name,
+				identifier = xPlayer.identifier,
+				coords = GetEntityCoords(playerPed),
+			},
 			netId = NetworkGetNetworkIdFromEntity(playerPed),
 			coords = GetEntityCoords(playerPed),
 			heading = math.ceil(GetEntityHeading(playerPed))
@@ -90,41 +131,40 @@ ESX.RegisterUsableItem(Config.GPS.item, function(source)
 	end
 end)
 
-RegisterNetEvent('esx:playerLogout', function(source)
-    local src = source
-	local xPlayer = ESX.GetPlayerFromId(src)
-
-	removeBlipById(xPlayer, 'stayOnLeaveServer')
+-- Serverinterne ESX-Events -> AddEventHandler, damit Clients sie nicht faken koennen.
+AddEventHandler('esx:playerLogout', function(source)
+	removeBlipByAnyJob(source, 'stayOnLeaveServer')
 end)
 
-RegisterNetEvent('esx:playerDropped', function(playerId, reason)
-	local src = playerId
-	local xPlayer = ESX.GetPlayerFromId(src)
+AddEventHandler('esx:playerDropped', function(playerId, reason)
+	local src = tonumber(playerId)
 
-	removeBlipById(xPlayer, 'stayOnLeaveServer')
+	removeBlipByAnyJob(src, 'stayOnLeaveServer')
+	playerJobs[src] = nil
+	panicCooldowns[src] = nil
 end)
 
-RegisterNetEvent("esx:setJob", function(playerId, newJob, oldJob)
+AddEventHandler("esx:setJob", function(playerId, newJob, oldJob)
 	if newJob.name == oldJob.name then return end
-	local src = playerId
-	local xPlayer = ESX.GetPlayerFromId(src)
+	local src = tonumber(playerId)
 	if not GPS[oldJob.name] then return end
-	if not not GPS[oldJob.name][tonumber(src)] then return end
+	if not GPS[oldJob.name][src] then return end
 
 	Config.Notification(src, Translation[Config.Locale]['gps_deactivated'], 'info')
 	TriggerClientEvent('msk_jobGPS:deactivateGPS', src)
-	removeBlipById(xPlayer, 'stayOnJobChange')
+	removeBlipById(src, oldJob.name, 'stayOnJobChange')
 end)
 
 RegisterNetEvent('msk_jobGPS:setDeath', function()
 	local src = source
    	local xPlayer = ESX.GetPlayerFromId(src)
+	if not xPlayer then return end
 	if not GPS[xPlayer.job.name] then return end
-	if not GPS[xPlayer.job.name][tonumber(xPlayer.source)] then return end
+	if not GPS[xPlayer.job.name][tonumber(src)] then return end
 
 	Config.Notification(src, Translation[Config.Locale]['gps_deactivated'], 'info')
 	TriggerClientEvent('msk_jobGPS:deactivateGPS', src)
-	removeBlipById(xPlayer, 'stayOnDeath')
+	removeBlipById(src, xPlayer.job.name, 'stayOnDeath')
 end)
 
 AddEventHandler('esx:onRemoveInventoryItem', function(source, item, count)
@@ -133,10 +173,10 @@ AddEventHandler('esx:onRemoveInventoryItem', function(source, item, count)
 	
 	if item == Config.GPS.item and count == 0 then
 		if not GPS[xPlayer.job.name] then return end
-		if not GPS[xPlayer.job.name][tonumber(xPlayer.source)] then return end
+		if not GPS[xPlayer.job.name][tonumber(src)] then return end
 
 		TriggerClientEvent('msk_jobGPS:deactivateGPS', src)
-		removeBlipById(xPlayer, 'stayOnRemoveItem')
+		removeBlipById(src, xPlayer.job.name, 'stayOnRemoveItem')
 
 		for playerId, v in pairs(GPS[xPlayer.job.name]) do
 			Config.Notification(playerId, Translation[Config.Locale]['gps_removed_inventory']:format(xPlayer.name), 'warning')
@@ -185,15 +225,31 @@ getPlayerJob = function(playerId)
 	return playerJobs[playerId] or 'unemployed'
 end
 
-removeBlipById = function(xPlayer, reason)
-	local source, job = xPlayer.source, xPlayer.job.name
+removeBlipById = function(source, jobName, reason)
+	source = tonumber(source)
+	local entry = GPS[jobName] and GPS[jobName][source]
+	if not entry then return end
 
-	if GPS[job] and GPS[job][tonumber(source)] then 
-		GPS[job][tonumber(source)] = nil
+	-- Name aus dem gespeicherten Eintrag lesen, damit es auch funktioniert,
+	-- wenn das ESX-Objekt beim Disconnect bereits entfernt wurde.
+	local name = entry.xPlayer and entry.xPlayer.name or 'Unknown'
+	GPS[jobName][source] = nil
 
-		for playerId, v in pairs(GPS[job]) do
-			Config.Notification(playerId, Translation[Config.Locale]['gps_deactivated_all']:format(xPlayer.name), 'info')
-			TriggerClientEvent('msk_jobGPS:deactivateGPSById', playerId, tonumber(source), reason)
+	for playerId, v in pairs(GPS[jobName]) do
+		Config.Notification(playerId, Translation[Config.Locale]['gps_deactivated_all']:format(name), 'info')
+		TriggerClientEvent('msk_jobGPS:deactivateGPSById', playerId, source, reason)
+	end
+end
+
+-- Entfernt einen Spieler aus dem Job-Table, in dem er tatsaechlich eingetragen ist.
+-- Fuer Faelle (Disconnect), in denen der aktuelle Job nicht mehr sicher ermittelbar ist.
+removeBlipByAnyJob = function(source, reason)
+	source = tonumber(source)
+
+	for job, players in pairs(GPS) do
+		if players[source] then
+			removeBlipById(source, job, reason)
+			return
 		end
 	end
 end

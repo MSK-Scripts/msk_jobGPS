@@ -23,6 +23,7 @@ Config.StayActivated = {
     ['stayOnLeaveServer'] = true,
     ['stayOnDeath'] = true,
     ['stayOnRemoveItem'] = true,
+    ['stayOnJobChange'] = false,
 }
 
 Config.GPS = {
@@ -37,6 +38,8 @@ Config.Panicbutton = {
     hotkey = {enable = true, key = 'f9'}, -- Command has to be activated // RegisterKeyMapping (https://docs.fivem.net/docs/game-references/input-mapper-parameter-ids/keyboard/)
     blipColor = 1, -- This will change the Blipcolor of GPS Blip
     notifyNearestPlayers = true,
+    radius = 8.0, -- Radius (meters) in which nearby players get notified. Checked serverside.
+    cooldown = 5, -- Cooldown (seconds) between panicbutton presses per player. 0 = disabled.
 }
 ----------------------------------------------------------------
 Config.Commands = {
