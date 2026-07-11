@@ -29,6 +29,16 @@ Config.StayActivated = {
 Config.GPS = {
     item = 'tracker',
     blip = {id = 1, color = 2, scale = 0.7, prefix = 'GPS'},
+    -- Blip sprite per movement category so you can tell how someone is travelling.
+    -- 'blip.id' above stays the fallback. (https://docs.fivem.net/docs/game-references/blips/)
+    sprites = {
+        foot  = 1,   -- on foot
+        bike  = 226, -- bicycle & motorcycle
+        car   = 225, -- car / any land vehicle
+        boat  = 427, -- boat / submarine
+        heli  = 64,  -- helicopter
+        plane = 423, -- plane
+    },
     refresh = 2.5 -- in seconds // Refreshtime if player is not in OneSync distance
 }
 

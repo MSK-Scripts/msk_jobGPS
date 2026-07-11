@@ -1,81 +1,54 @@
-local isActivated = false
 local Blips, activeBlips = {}, {}
 
-AddEventHandler('esx:onPlayerDeath', function()
-    TriggerServerEvent('msk_jobGPS:setDeath')
-end)
+--------------------------------------------------------------------------------
+-- Helpers
+--------------------------------------------------------------------------------
 
-AddEventHandler('msk_jobGPS:activateGPS', function(GPS)
-    isActivated = true
-end)
-
-AddEventHandler('msk_jobGPS:deactivateGPS', function()
-    isActivated = false
-end)
-
-if Config.Panicbutton.enable and Config.Commands.panicbutton.enable then
-	RegisterCommand(Config.Commands.panicbutton.command, function()
-        if not Config.allowedJobs[ESX.PlayerData.job.name] then return end
-        if not Config.allowedJobs[ESX.PlayerData.job.name].panicbutton then return end
-
-		TriggerServerEvent('msk_jobGPS:togglePanicbutton')
-	end)
-
-    if Config.Panicbutton.hotkey.enable then
-        RegisterKeyMapping(Config.Commands.panicbutton.command, 'Panicbutton', 'keyboard', Config.Panicbutton.hotkey.key)
-    end
+local function logging(code, ...)
+    if not Config.Debug then return end
+    MSK.Logging(code, ...)
 end
 
-RegisterNetEvent('msk_jobGPS:activatePanicbutton')
-AddEventHandler('msk_jobGPS:activatePanicbutton', function(xPlayer)
-    local playerId = tonumber(xPlayer.source)
-
-    if activeBlips[playerId] then SetBlipColour(activeBlips[playerId].blip, Config.Panicbutton.blipColor) end
-    SetNewWaypoint(xPlayer.coords.x, xPlayer.coords.y)
-end)
-
-addBlips = function(GPS)
-    for playerId, v in pairs(GPS) do
-        logging('debug', playerId, v)
-        -- v = xPlayer, netId, coords, heading
-        local xPlayer = v.xPlayer
-
-        if ESX.PlayerData.identifier ~= xPlayer.identifier then
-            local blip = AddBlipForCoord(xPlayer.coords.x, xPlayer.coords.y, xPlayer.coords.z)
-
-            SetBlipRotation(blip, v.heading)
-
-            SetBlipSprite(blip, Config.GPS.blip.id)
-            SetBlipScale(blip, Config.GPS.blip.scale)
-            SetBlipColour(blip, Config.GPS.blip.color)
-            SetBlipDisplay(blip, 2)
-            SetBlipAsShortRange(blip, true)
-
-            AddTextEntry("BLIP_OTHPLYR", Config.GPS.blip.prefix)
-            SetBlipCategory(blip, 7)
-            ShowOutlineIndicatorOnBlip(blip, true)
-	        SetBlipSecondaryColour(blip, 255, 0, 0)
-            ShowHeadingIndicatorOnBlip(blip, true)
-
-            AddTextEntry("NAME_" .. xPlayer.name, "~a~")
-            BeginTextCommandSetBlipName("NAME_" .. xPlayer.name)
-            AddTextComponentString(xPlayer.name)
-            EndTextCommandSetBlipName(blip)
-
-            Blips[#Blips + 1] = blip
-            activeBlips[playerId] = {isActive = false, blip = blip}
-        end
-    end
+local function mySource()
+    return GetPlayerServerId(PlayerId())
 end
-RegisterNetEvent('msk_jobGPS:activateGPS', addBlips)
 
-addBlip = function(GPS, xPlayer, heading)
-    logging('debug', 'Add Blip for ' .. xPlayer.source)
-    local blip = AddBlipForCoord(xPlayer.coords.x, xPlayer.coords.y, xPlayer.coords.z)
+-- Blip sprite for a movement category (configurable, with fallback).
+local function getSprite(category)
+    local sprites = Config.GPS.sprites
+    return (sprites and sprites[category]) or Config.GPS.blip.id or 1
+end
 
-    SetBlipRotation(blip, heading)
+-- Clientside vehicle category, used for live tracking when the ped is nearby.
+local function getVehicleCategory(ped)
+    local veh = ped and GetVehiclePedIsIn(ped, false)
+    if not veh or veh == 0 then return 'foot' end
 
-    SetBlipSprite(blip, Config.GPS.blip.id)
+    local vtype = GetVehicleType(veh)
+
+    if vtype == 'bike' then
+        return 'bike'
+    elseif vtype == 'boat' or vtype == 'submarine' then
+        return 'boat'
+    elseif vtype == 'heli' then
+        return 'heli'
+    elseif vtype == 'plane' then
+        return 'plane'
+    end
+
+    return 'car'
+end
+
+local function inOneSync(netId)
+    local playerPed = NetworkDoesNetworkIdExist(netId) and NetworkGetEntityFromNetworkId(netId)
+
+    if playerPed and DoesEntityExist(playerPed) then return {ped = playerPed} end
+    return false
+end
+
+local function styleBlip(blip, xPlayer, heading, category)
+    SetBlipSprite(blip, getSprite(category or 'foot'))
+    SetBlipRotation(blip, heading or 0)
     SetBlipScale(blip, Config.GPS.blip.scale)
     SetBlipColour(blip, Config.GPS.blip.color)
     SetBlipDisplay(blip, 2)
@@ -84,60 +57,92 @@ addBlip = function(GPS, xPlayer, heading)
     AddTextEntry("BLIP_OTHPLYR", Config.GPS.blip.prefix)
     SetBlipCategory(blip, 7)
     ShowOutlineIndicatorOnBlip(blip, true)
-	SetBlipSecondaryColour(blip, 255, 0, 0)
+    SetBlipSecondaryColour(blip, 255, 0, 0)
     ShowHeadingIndicatorOnBlip(blip, true)
 
     AddTextEntry("NAME_" .. xPlayer.name, "~a~")
     BeginTextCommandSetBlipName("NAME_" .. xPlayer.name)
     AddTextComponentString(xPlayer.name)
     EndTextCommandSetBlipName(blip)
+end
+
+local function createBlip(xPlayer, heading, category)
+    local blip = AddBlipForCoord(xPlayer.coords.x, xPlayer.coords.y, xPlayer.coords.z)
+    styleBlip(blip, xPlayer, heading, category)
 
     Blips[#Blips + 1] = blip
     activeBlips[tonumber(xPlayer.source)] = {isActive = false, blip = blip}
+    return blip
 end
 
-refreshBlips = function(GPS)
+--------------------------------------------------------------------------------
+-- Blip handling
+--------------------------------------------------------------------------------
+
+local function addBlips(GPS)
+    for _, v in pairs(GPS) do
+        -- v = xPlayer, netId, coords, heading, veh
+        local xPlayer = v.xPlayer
+        local pid = tonumber(xPlayer.source)
+        logging('debug', pid, v)
+
+        if pid ~= mySource() and not activeBlips[pid] then
+            createBlip(xPlayer, v.heading, v.veh)
+        end
+    end
+end
+RegisterNetEvent('msk_jobGPS:activateGPS', addBlips)
+
+local function refreshBlips(GPS)
     logging('debug', 'refreshBlips')
 
-    for playerId, v in pairs(GPS) do
-        -- v = xPlayer, netId, coords, heading
+    for _, v in pairs(GPS) do
+        -- v = xPlayer, netId, coords, heading, veh
         local xPlayer = v.xPlayer
-        
-        if ESX.PlayerData.identifier ~= xPlayer.identifier then
-            if not activeBlips[playerId] then addBlip(GPS, xPlayer, v.heading) end
+        local pid = tonumber(xPlayer.source)
 
-            logging('debug', 'Blip is active')
+        if pid ~= mySource() then
+            if not activeBlips[pid] then createBlip(xPlayer, v.heading, v.veh) end
+
+            local blip = activeBlips[pid].blip
+            SetBlipSprite(blip, getSprite(v.veh))
+
             local OneSync = inOneSync(v.netId)
-                
-            if OneSync and not activeBlips[playerId].isActive then
+
+            if OneSync and not activeBlips[pid].isActive then
                 logging('debug', 'inOneSync')
-                
+
                 CreateThread(function()
-                    activeBlips[playerId].isActive = true
+                    activeBlips[pid].isActive = true
 
-                    while activeBlips[playerId] and activeBlips[playerId].isActive and DoesEntityExist(OneSync.ped) do
-                        local coords = GetEntityCoords(OneSync.ped)
-                        local heading = math.ceil(GetEntityHeading(OneSync.ped))
+                    while activeBlips[pid] and activeBlips[pid].isActive and DoesEntityExist(OneSync.ped) do
+                        local ped = OneSync.ped
+                        local liveBlip = activeBlips[pid] and activeBlips[pid].blip
+                        if not liveBlip then break end
 
-                        SetBlipCoords(activeBlips[playerId].blip, coords.x, coords.y, coords.z)
-                        SetBlipRotation(activeBlips[playerId].blip, heading)
+                        local coords = GetEntityCoords(ped)
+                        local heading = math.ceil(GetEntityHeading(ped))
 
-                        Wait(0)
+                        SetBlipCoords(liveBlip, coords.x, coords.y, coords.z)
+                        SetBlipRotation(liveBlip, heading)
+                        SetBlipSprite(liveBlip, getSprite(getVehicleCategory(ped)))
+
+                        Wait(250)
                     end
                 end)
             elseif not OneSync then
                 logging('debug', 'not inOneSync')
-                activeBlips[playerId].isActive = false
+                activeBlips[pid].isActive = false
 
-                SetBlipCoords(activeBlips[playerId].blip, v.coords.x, v.coords.y, v.coords.z)
-                SetBlipRotation(activeBlips[playerId].blip, v.heading)
+                SetBlipCoords(blip, v.coords.x, v.coords.y, v.coords.z)
+                SetBlipRotation(blip, v.heading)
             end
         end
     end
 end
 RegisterNetEvent('msk_jobGPS:refreshBlips', refreshBlips)
 
-removeBlips = function()
+local function removeBlips()
     logging('debug', 'removeBlips')
 
     for k, blip in pairs(Blips) do
@@ -149,7 +154,7 @@ removeBlips = function()
 end
 RegisterNetEvent('msk_jobGPS:deactivateGPS', removeBlips)
 
-removeBlipById = function(playerId, reason)
+local function removeBlipById(playerId, reason)
     if not activeBlips[playerId] then return end
 
     if Config.StayActivated.enable then
@@ -178,14 +183,32 @@ removeBlipById = function(playerId, reason)
 end
 RegisterNetEvent('msk_jobGPS:deactivateGPSById', removeBlipById)
 
-inOneSync = function(netId)
-    local playerPed = NetworkDoesNetworkIdExist(netId) and NetworkGetEntityFromNetworkId(netId)
+--------------------------------------------------------------------------------
+-- Panicbutton
+--------------------------------------------------------------------------------
 
-    if DoesEntityExist(playerPed) then return {ped = playerPed} end
-    return false
+if Config.Panicbutton.enable and Config.Commands.panicbutton.enable then
+    RegisterCommand(Config.Commands.panicbutton.command, function()
+        -- The server validates job, GPS state, item and cooldown.
+        TriggerServerEvent('msk_jobGPS:togglePanicbutton')
+    end)
+
+    if Config.Panicbutton.hotkey.enable then
+        RegisterKeyMapping(Config.Commands.panicbutton.command, 'Panicbutton', 'keyboard', Config.Panicbutton.hotkey.key)
+    end
 end
 
-logging = function(code, ...)
-    if not Config.Debug then return end
-    MSK.Logging(code, ...)
-end
+RegisterNetEvent('msk_jobGPS:activatePanicbutton', function(data)
+    local playerId = tonumber(data.source)
+
+    if activeBlips[playerId] then SetBlipColour(activeBlips[playerId].blip, Config.Panicbutton.blipColor) end
+    SetNewWaypoint(data.coords.x, data.coords.y)
+end)
+
+--------------------------------------------------------------------------------
+-- Death (framework-agnostic via msk_core)
+--------------------------------------------------------------------------------
+
+AddEventHandler('msk_core:onPlayerDeath', function(data)
+    TriggerServerEvent('msk_jobGPS:setDeath')
+end)

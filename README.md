@@ -1,17 +1,18 @@
 # msk_jobGPS
-Player, Job, Blip & Panicbutton
+Player, Job, Blip & Panicbutton for ESX and QBCore
 
 ### [Forum Post](https://forum.cfx.re/t/msk-jobgps/5109080)
 
 ## Description
-* If the Player is in OneSync Distance then the Blip will be updated lifetime
-* If the Player is not in OneSync Distance then the Blip will be updated every X Seconds
-* Use an Item or Command to activate/deactivate your GPS Signal and see Blips of other Player with the same Job
-* If you die or leave the server then the Blip will be deleted
-* You can configure wich jobs can use gps or panicbutton
-* If you use the Panicbutton, the Blipcolor will be changed and all Players with the same job will get a notify
-* The nearest Players will get a notification if you use the Panicbutton
+* Works on both ESX and QBCore (framework is auto detected through msk_core)
+* Use an Item or Command to activate/deactivate your GPS signal and see the blips of other players with the same job
+* The blip icon shows how a player is travelling: on foot, bike (bicycle & motorcycle), car, boat, helicopter or plane
+* If the player is in OneSync distance the blip is updated in real time, otherwise it is updated every X seconds
+* If you die, change your job, drop the tracker item or leave the server the blip is removed
+* You can configure which jobs may use the GPS or the panicbutton
+* If you use the panicbutton the blip color changes and all players with the same job get a notification
+* The nearest players also get a notification when the panicbutton is used
 
 ## Requirements
-* [ESX Legacy](https://github.com/esx-framework/esx_core)
 * [msk_core](https://github.com/MSK-Scripts/msk_core)
+* A framework: [ESX Legacy](https://github.com/esx-framework/esx_core) or [QBCore](https://github.com/qbcore-framework/qb-core)
